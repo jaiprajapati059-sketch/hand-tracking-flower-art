@@ -4,50 +4,25 @@
   <meta charset="UTF-8" />
   <title>Hand Tracking Flower Art</title>
   <style>
-    body {
-      margin: 0;
-      background: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      overflow: hidden;
-    }
-    #canvas-container {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-    }
-    video, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transform: scaleX(-1);
-    }
+    body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+    #canvas-container { position: relative; width: 100vw; height: 100vh; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
-
   <div id="canvas-container">
     <video id="webcam" playsinline></video>
     <canvas id="output_canvas"></canvas>
   </div>
-
   <script>
     const videoElement = document.getElementById('webcam');
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
-    // Smooth position variables (Lerp)
-    let smoothX = 0;
-    let smoothY = 0;
-    let smoothBloom = 0.1;
-    const lerpFactor = 0.15; // Lower values = smoother/slower movement
+    let smoothX = 0, smoothY = 0, smoothBloom = 0.1;
+    const lerpFactor = 0.12;
 
     function resizeCanvas() {
       canvasElement.width = window.innerWidth;
@@ -60,64 +35,84 @@
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle);
-
       ctx.shadowBlur = 15;
       ctx.shadowColor = glowColor;
-
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.quadraticCurveTo(width, -length / 2, 0, -length);
       ctx.quadraticCurveTo(-width, -length / 2, 0, 0);
-      
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1;
       ctx.stroke();
-
       ctx.restore();
     }
 
-    function drawGlowLotus(ctx, x, y, bloomFactor) {
-      if (bloomFactor <= 0.05) return;
+    function drawSingleFlower(ctx, x, y, scale) {
+      const petalLength = 45 * scale;
+      const petalWidth = 16 * scale;
 
-      // Draw Glowing Blue Stems
-      ctx.save();
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = '#3b82f6';
-      ctx.beginPath();
-      ctx.moveTo(x, canvasElement.height);
-      ctx.quadraticCurveTo(x - 30, y + (canvasElement.height - y) / 2, x, y);
-      ctx.strokeStyle = '#60a5fa';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      // Branch lines
-      ctx.beginPath();
-      ctx.moveTo(x, y + 60);
-      ctx.lineTo(x - 40, y + 20);
-      ctx.moveTo(x, y + 100);
-      ctx.lineTo(x + 35, y + 50);
-      ctx.strokeStyle = '#2563eb';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.restore();
-
-      // Draw Lotus Layers
-      const petalLength = 50 * bloomFactor;
-      const petalWidth = 18 * bloomFactor;
-
-      // Outer Layer
       const outerAngles = [-0.8, -0.4, 0, 0.4, 0.8];
       outerAngles.forEach(ang => {
-        drawLotusPetal(ctx, x, y, petalLength * 1.1, petalWidth * 0.9, ang, 'rgba(236, 72, 153, 0.6)', '#f43f5e');
+        drawLotusPetal(ctx, x, y, petalLength * 1.1, petalWidth * 0.9, ang, 'rgba(236, 72, 153, 0.65)', '#f43f5e');
       });
 
-      // Inner Layer
       const innerAngles = [-0.5, -0.25, 0, 0.25, 0.5];
       innerAngles.forEach(ang => {
-        drawLotusPetal(ctx, x, y, petalLength, petalWidth, ang, 'rgba(244, 114, 182, 0.85)', '#ec4899');
+        drawLotusPetal(ctx, x, y, petalLength, petalWidth, ang, 'rgba(244, 114, 182, 0.9)', '#ec4899');
       });
+    }
+
+    function drawMultiFlowerBouquet(ctx, x, y, bloomFactor) {
+      if (bloomFactor <= 0.05) return;
+
+      const bottomY = canvasElement.height;
+
+      // Glowing Blue Stem System
+      ctx.save();
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = '#3b82f6';
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 3;
+
+      // Central Main Stem
+      ctx.beginPath();
+      ctx.moveTo(x, bottomY);
+      ctx.quadraticCurveTo(x - 20, y + (bottomY - y) * 0.5, x, y);
+      ctx.stroke();
+
+      // Left Branch
+      const leftX = x - 70 * bloomFactor;
+      const leftY = y + 40;
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y + (bottomY - y) * 0.3);
+      ctx.quadraticCurveTo(x - 50, y + 100, leftX, leftY);
+      ctx.stroke();
+
+      // Right Branch
+      const rightX = x + 75 * bloomFactor;
+      const rightY = y + 60;
+      ctx.beginPath();
+      ctx.moveTo(x + 5, y + (bottomY - y) * 0.4);
+      ctx.quadraticCurveTo(x + 50, y + 120, rightX, rightY);
+      ctx.stroke();
+
+      // Far Left Outer Branch
+      const farLeftX = x - 130 * bloomFactor;
+      const farLeftY = y + 90;
+      ctx.beginPath();
+      ctx.moveTo(x - 15, y + (bottomY - y) * 0.25);
+      ctx.quadraticCurveTo(x - 90, y + 150, farLeftX, farLeftY);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // Draw Flowers at each branch endpoint
+      drawSingleFlower(ctx, x, y, bloomFactor * 1.1);            // Main Center Flower
+      drawSingleFlower(ctx, leftX, leftY, bloomFactor * 0.85);     // Left Flower
+      drawSingleFlower(ctx, rightX, rightY, bloomFactor * 0.8);    // Right Flower
+      drawSingleFlower(ctx, farLeftX, farLeftY, bloomFactor * 0.65); // Small Outer Flower
     }
 
     function onResults(results) {
@@ -126,11 +121,9 @@
 
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
-        
         const thumb = landmarks[4];
         const index = landmarks[8];
 
-        // Target coordinates
         const targetX = (1 - index.x) * canvasElement.width;
         const targetY = index.y * canvasElement.height;
 
@@ -138,27 +131,24 @@
           (thumb.x - index.x) * canvasElement.width,
           (thumb.y - index.y) * canvasElement.height
         );
-        const targetBloom = Math.min(Math.max(rawDistance / 180, 0.05), 1.4);
+        const targetBloom = Math.min(Math.max(rawDistance / 180, 0.05), 1.5);
 
-        // Apply Lerp to remove jitter
         smoothX += (targetX - smoothX) * lerpFactor;
         smoothY += (targetY - smoothY) * lerpFactor;
         smoothBloom += (targetBloom - smoothBloom) * lerpFactor;
 
-        // Render Flower
-        drawGlowLotus(canvasCtx, smoothX, smoothY, smoothBloom);
+        drawMultiFlowerBouquet(canvasCtx, smoothX, smoothY, smoothBloom);
 
-        // Overlay Text
+        // On-Screen Stats
         canvasCtx.save();
         canvasCtx.scale(-1, 1);
         canvasCtx.font = '16px monospace';
         canvasCtx.fillStyle = '#60a5fa';
         canvasCtx.shadowBlur = 8;
         canvasCtx.shadowColor = '#3b82f6';
-        canvasCtx.fillText(`Bloom: ${smoothBloom.toFixed(2)}`, -smoothX + 15, smoothY);
+        canvasCtx.fillText(`Bloom: ${smoothBloom.toFixed(2)}`, -smoothX + 20, smoothY);
         canvasCtx.restore();
       }
-
       canvasCtx.restore();
     }
 
