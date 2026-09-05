@@ -50,8 +50,9 @@
     }
 
     function drawSingleFlower(ctx, x, y, scale) {
-      const petalLength = 45 * scale;
-      const petalWidth = 16 * scale;
+      if (scale <= 0.05) return;
+      const petalLength = 40 * scale;
+      const petalWidth = 14 * scale;
 
       const outerAngles = [-0.8, -0.4, 0, 0.4, 0.8];
       outerAngles.forEach(ang => {
@@ -64,55 +65,60 @@
       });
     }
 
-    function drawMultiFlowerBouquet(ctx, x, y, bloomFactor) {
+    function drawBranchWithFlower(ctx, startX, startY, endX, endY, cpX, cpY, scale) {
+      // Draw smooth curved branch connected to main stem
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+      ctx.stroke();
+
+      // Render flower at the branch tip
+      drawSingleFlower(ctx, endX, endY, scale);
+    }
+
+    function drawMultiFlowerTree(ctx, x, y, bloomFactor) {
       if (bloomFactor <= 0.05) return;
 
       const bottomY = canvasElement.height;
 
-      // Glowing Blue Stem System
+      // 1. Draw Central Straight Stem
       ctx.save();
       ctx.shadowBlur = 14;
       ctx.shadowColor = '#3b82f6';
       ctx.strokeStyle = '#60a5fa';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5;
 
-      // Central Main Stem
       ctx.beginPath();
       ctx.moveTo(x, bottomY);
-      ctx.quadraticCurveTo(x - 20, y + (bottomY - y) * 0.5, x, y);
+      ctx.lineTo(x, y); // Direct vertical line to fingertip
       ctx.stroke();
 
-      // Left Branch
-      const leftX = x - 70 * bloomFactor;
-      const leftY = y + 40;
-      ctx.beginPath();
-      ctx.moveTo(x - 10, y + (bottomY - y) * 0.3);
-      ctx.quadraticCurveTo(x - 50, y + 100, leftX, leftY);
-      ctx.stroke();
+      // Stem height span for joint connections
+      const stemLength = bottomY - y;
 
-      // Right Branch
-      const rightX = x + 75 * bloomFactor;
-      const rightY = y + 60;
-      ctx.beginPath();
-      ctx.moveTo(x + 5, y + (bottomY - y) * 0.4);
-      ctx.quadraticCurveTo(x + 50, y + 120, rightX, rightY);
-      ctx.stroke();
+      // Define 5 Side Branch Configurations (directly attached to main stem at x)
+      const branches = [
+        // Left Branch 1 (Upper)
+        { startY: y + stemLength * 0.2, endX: x - 110 * bloomFactor, endY: y + 50, cpX: x - 60, cpY: y + 10, scale: bloomFactor * 0.85 },
+        // Right Branch 1 (Upper)
+        { startY: y + stemLength * 0.28, endX: x + 120 * bloomFactor, endY: y + 30, cpX: x + 70, cpY: y - 10, scale: bloomFactor * 0.9 },
+        // Left Branch 2 (Middle)
+        { startY: y + stemLength * 0.45, endX: x - 160 * bloomFactor, endY: y + 130, cpX: x - 90, cpY: y + 80, scale: bloomFactor * 0.8 },
+        // Right Branch 2 (Middle)
+        { startY: y + stemLength * 0.55, endX: x + 170 * bloomFactor, endY: y + 180, cpX: x + 100, cpY: y + 120, scale: bloomFactor * 0.75 },
+        // Lower Left Branch
+        { startY: y + stemLength * 0.68, endX: x - 200 * bloomFactor, endY: y + 250, cpX: x - 120, cpY: y + 200, scale: bloomFactor * 0.7 }
+      ];
 
-      // Far Left Outer Branch
-      const farLeftX = x - 130 * bloomFactor;
-      const farLeftY = y + 90;
-      ctx.beginPath();
-      ctx.moveTo(x - 15, y + (bottomY - y) * 0.25);
-      ctx.quadraticCurveTo(x - 90, y + 150, farLeftX, farLeftY);
-      ctx.stroke();
+      // Draw each side branch and flower
+      branches.forEach(b => {
+        drawBranchWithFlower(ctx, x, b.startY, b.endX, b.endY, b.cpX, b.cpY, b.scale);
+      });
 
       ctx.restore();
 
-      // Draw Flowers at each branch endpoint
-      drawSingleFlower(ctx, x, y, bloomFactor * 1.1);            // Main Center Flower
-      drawSingleFlower(ctx, leftX, leftY, bloomFactor * 0.85);     // Left Flower
-      drawSingleFlower(ctx, rightX, rightY, bloomFactor * 0.8);    // Right Flower
-      drawSingleFlower(ctx, farLeftX, farLeftY, bloomFactor * 0.65); // Small Outer Flower
+      // 2. Draw Top Main Flower (Flower #6) at fingertip
+      drawSingleFlower(ctx, x, y, bloomFactor * 1.15);
     }
 
     function onResults(results) {
@@ -137,7 +143,7 @@
         smoothY += (targetY - smoothY) * lerpFactor;
         smoothBloom += (targetBloom - smoothBloom) * lerpFactor;
 
-        drawMultiFlowerBouquet(canvasCtx, smoothX, smoothY, smoothBloom);
+        drawMultiFlowerTree(canvasCtx, smoothX, smoothY, smoothBloom);
 
         // On-Screen Stats
         canvasCtx.save();
