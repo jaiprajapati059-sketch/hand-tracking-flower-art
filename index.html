@@ -6,13 +6,12 @@
   <style>
     body {
       margin: 0;
-      background: #0d0d11;
+      background: #000;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
       overflow: hidden;
-      font-family: sans-serif;
     }
     #canvas-container {
       position: relative;
@@ -26,10 +25,9 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* Mirror camera feed */
+      transform: scaleX(-1);
     }
   </style>
-  <!-- MediaPipe Hands SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
@@ -45,6 +43,12 @@
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
+    // Smooth position variables (Lerp)
+    let smoothX = 0;
+    let smoothY = 0;
+    let smoothBloom = 0.1;
+    const lerpFactor = 0.15; // Lower values = smoother/slower movement
+
     function resizeCanvas() {
       canvasElement.width = window.innerWidth;
       canvasElement.height = window.innerHeight;
@@ -52,74 +56,109 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    function drawFlower(ctx, x, y, size, bloomFactor) {
-      if (size <= 0) return;
+    function drawLotusPetal(ctx, x, y, length, width, angle, color, glowColor) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
 
-      // Draw Stems
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = glowColor;
+
       ctx.beginPath();
-      ctx.moveTo(x, canvasElement.height);
-      ctx.quadraticCurveTo(x + 20, y + 50, x, y);
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 4;
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(width, -length / 2, 0, -length);
+      ctx.quadraticCurveTo(-width, -length / 2, 0, 0);
+      
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Draw Blooming Petals
-      const numPetals = 6;
-      const petalRadius = size * bloomFactor * 40;
+      ctx.restore();
+    }
 
-      for (let i = 0; i < numPetals; i++) {
-        const angle = (i * (2 * Math.PI)) / numPetals;
-        const px = x + Math.cos(angle) * petalRadius;
-        const py = y + Math.sin(angle) * petalRadius;
+    function drawGlowLotus(ctx, x, y, bloomFactor) {
+      if (bloomFactor <= 0.05) return;
 
-        ctx.beginPath();
-        ctx.arc(px, py, petalRadius * 0.6, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(244, 114, 182, 0.7)';
-        ctx.fill();
-        ctx.strokeStyle = '#ec4899';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-
-      // Center Bulb
+      // Draw Glowing Blue Stems
+      ctx.save();
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#3b82f6';
       ctx.beginPath();
-      ctx.arc(x, y, 10, 0, 2 * Math.PI);
-      ctx.fillStyle = '#facc15';
-      ctx.fill();
+      ctx.moveTo(x, canvasElement.height);
+      ctx.quadraticCurveTo(x - 30, y + (canvasElement.height - y) / 2, x, y);
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Branch lines
+      ctx.beginPath();
+      ctx.moveTo(x, y + 60);
+      ctx.lineTo(x - 40, y + 20);
+      ctx.moveTo(x, y + 100);
+      ctx.lineTo(x + 35, y + 50);
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw Lotus Layers
+      const petalLength = 50 * bloomFactor;
+      const petalWidth = 18 * bloomFactor;
+
+      // Outer Layer
+      const outerAngles = [-0.8, -0.4, 0, 0.4, 0.8];
+      outerAngles.forEach(ang => {
+        drawLotusPetal(ctx, x, y, petalLength * 1.1, petalWidth * 0.9, ang, 'rgba(236, 72, 153, 0.6)', '#f43f5e');
+      });
+
+      // Inner Layer
+      const innerAngles = [-0.5, -0.25, 0, 0.25, 0.5];
+      innerAngles.forEach(ang => {
+        drawLotusPetal(ctx, x, y, petalLength, petalWidth, ang, 'rgba(244, 114, 182, 0.85)', '#ec4899');
+      });
     }
 
     function onResults(results) {
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-      if (results.multiHandLandmarks) {
-        for (const landmarks of results.multiHandLandmarks) {
-          // Track Thumb Tip (4) and Index Tip (8)
-          const thumb = landmarks[4];
-          const index = landmarks[8];
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        const thumb = landmarks[4];
+        const index = landmarks[8];
 
-          // Calculate distance for bloom intensity
-          const distance = Math.hypot(
-            (thumb.x - index.x) * canvasElement.width,
-            (thumb.y - index.y) * canvasElement.height
-          );
+        // Target coordinates
+        const targetX = (1 - index.x) * canvasElement.width;
+        const targetY = index.y * canvasElement.height;
 
-          const bloom = Math.min(Math.max(distance / 200, 0.1), 1.5);
-          const flowerX = (1 - index.x) * canvasElement.width; // Flipped for mirrored feed
-          const flowerY = index.y * canvasElement.height;
+        const rawDistance = Math.hypot(
+          (thumb.x - index.x) * canvasElement.width,
+          (thumb.y - index.y) * canvasElement.height
+        );
+        const targetBloom = Math.min(Math.max(rawDistance / 180, 0.05), 1.4);
 
-          // Render Flower at index finger position
-          drawFlower(canvasCtx, flowerX, flowerY, 1.2, bloom);
+        // Apply Lerp to remove jitter
+        smoothX += (targetX - smoothX) * lerpFactor;
+        smoothY += (targetY - smoothY) * lerpFactor;
+        smoothBloom += (targetBloom - smoothBloom) * lerpFactor;
 
-          // Overlay On-Screen Stats
-          canvasCtx.save();
-          canvasCtx.scale(-1, 1); // Un-flip text
-          canvasCtx.font = 'bold 20px monospace';
-          canvasCtx.fillStyle = '#60a5fa';
-          canvasCtx.fillText(`Bloom: ${bloom.toFixed(2)}`, -flowerX + 20, flowerY);
-          canvasCtx.restore();
-        }
+        // Render Flower
+        drawGlowLotus(canvasCtx, smoothX, smoothY, smoothBloom);
+
+        // Overlay Text
+        canvasCtx.save();
+        canvasCtx.scale(-1, 1);
+        canvasCtx.font = '16px monospace';
+        canvasCtx.fillStyle = '#60a5fa';
+        canvasCtx.shadowBlur = 8;
+        canvasCtx.shadowColor = '#3b82f6';
+        canvasCtx.fillText(`Bloom: ${smoothBloom.toFixed(2)}`, -smoothX + 15, smoothY);
+        canvasCtx.restore();
       }
+
       canvasCtx.restore();
     }
 
@@ -128,10 +167,10 @@
     });
 
     hands.setOptions({
-      maxNumHands: 2,
+      maxNumHands: 1,
       modelComplexity: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
     });
 
     hands.onResults(onResults);
