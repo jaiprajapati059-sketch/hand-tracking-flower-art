@@ -1,1 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hand Tracking Flower Art</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0d0d11;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #canvas-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    video, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Mirror camera feed */
+    }
+  </style>
+  <!-- MediaPipe Hands SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
 
+  <div id="canvas-container">
+    <video id="webcam" playsinline></video>
+    <canvas id="output_canvas"></canvas>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    function resizeCanvas() {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function drawFlower(ctx, x, y, size, bloomFactor) {
+      if (size <= 0) return;
+
+      // Draw Stems
+      ctx.beginPath();
+      ctx.moveTo(x, canvasElement.height);
+      ctx.quadraticCurveTo(x + 20, y + 50, x, y);
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Draw Blooming Petals
+      const numPetals = 6;
+      const petalRadius = size * bloomFactor * 40;
+
+      for (let i = 0; i < numPetals; i++) {
+        const angle = (i * (2 * Math.PI)) / numPetals;
+        const px = x + Math.cos(angle) * petalRadius;
+        const py = y + Math.sin(angle) * petalRadius;
+
+        ctx.beginPath();
+        ctx.arc(px, py, petalRadius * 0.6, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(244, 114, 182, 0.7)';
+        ctx.fill();
+        ctx.strokeStyle = '#ec4899';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Center Bulb
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = '#facc15';
+      ctx.fill();
+    }
+
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks) {
+        for (const landmarks of results.multiHandLandmarks) {
+          // Track Thumb Tip (4) and Index Tip (8)
+          const thumb = landmarks[4];
+          const index = landmarks[8];
+
+          // Calculate distance for bloom intensity
+          const distance = Math.hypot(
+            (thumb.x - index.x) * canvasElement.width,
+            (thumb.y - index.y) * canvasElement.height
+          );
+
+          const bloom = Math.min(Math.max(distance / 200, 0.1), 1.5);
+          const flowerX = (1 - index.x) * canvasElement.width; // Flipped for mirrored feed
+          const flowerY = index.y * canvasElement.height;
+
+          // Render Flower at index finger position
+          drawFlower(canvasCtx, flowerX, flowerY, 1.2, bloom);
+
+          // Overlay On-Screen Stats
+          canvasCtx.save();
+          canvasCtx.scale(-1, 1); // Un-flip text
+          canvasCtx.font = 'bold 20px monospace';
+          canvasCtx.fillStyle = '#60a5fa';
+          canvasCtx.fillText(`Bloom: ${bloom.toFixed(2)}`, -flowerX + 20, flowerY);
+          canvasCtx.restore();
+        }
+      }
+      canvasCtx.restore();
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720
+    });
+
+    camera.start();
+  </script>
+</body>
+</html>
